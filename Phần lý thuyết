@@ -1,0 +1,95 @@
+Câu 1
+​Trong .NET Common Language Runtime (CLR), cách phân bổ và quản lý bộ nhớ được phân hóa rõ rệt giữa hai nhóm kiểu dữ liệu nhằm cân bằng giữa hiệu năng truy xuất và sự linh hoạt của dữ liệu động.
+​Bản chất và vị trí lưu trữ
+​Value Types (Kiểu giá trị)
+​Các kiểu dữ liệu đại diện: Các kiểu số nguyên (sbyte, byte, short, int, long), số thực (float, double, decimal), bool, char, enum, và các cấu trúc tự định nghĩa bằng struct. 
+Cơ chế lưu trữ: 
+​Khi được khai báo là biến cục bộ bên trong một phương thức (local variable), toàn bộ dữ liệu thực tế của biến được cấp phát trực tiếp trên Stack.
+​Ngoại lệ quan trọng: Value Type không phải lúc nào cũng nằm trên Stack. Khi một Value Type là một trường (field) bên trong một class, nó sẽ nằm trọn gói bên trong vùng nhớ của đối tượng đó trên Heap. Ngoài ra, khi biến cục bộ bị bắt giữ bởi biểu thức Lambda/Closure, hoặc nằm trong các State Machine của phương thức async/await hay yield return, CLR sẽ chuyển chúng vào một class ẩn được cấp phát trên Heap. 
+​Đặc tính vùng nhớ Stack: Hoạt động theo cấu trúc LIFO (Last In, First Out). Con trỏ Stack Pointer chỉ cần dịch chuyển lên/xuống để cấp phát hoặc thu hồi bộ nhớ. Quá trình này diễn ra cực nhanh, tốn chi phí CPU tối thiểu và không tạo áp lực lên bộ thu dọn rác.
+Reference Types (Kiểu tham chiếu)
+​Các kiểu dữ liệu đại diện: class, interface, delegate, record class, object, string, và mọi loại mảng (int[], object[],...). 
+​Cơ chế lưu trữ: 
+​Dữ liệu đối tượng thực tế (gồm dữ liệu các trường, Type Object Pointer và Sync Block Index) luôn được cấp phát trên vùng nhớ Heap (cụ thể là Managed Heap).
+​Biến đại diện cho đối tượng chỉ là một con trỏ tham chiếu (Reference Pointer), lưu trữ địa chỉ 32-bit (trên hệ điều hành 32-bit) hoặc 64-bit (trên hệ điều hành 64-bit) trỏ đến ô nhớ thực tế trên Heap. Con trỏ này thường nằm trên Stack nếu là biến cục bộ.
+​Cơ chế gán giá trị và truyền tham số
+​Value Types: 
+​Khi thực hiện phép gán (b = a) hoặc truyền tham số vào hàm mà không dùng từ khóa ref/in/out, CLR thực hiện thao tác sao chép từng bit (bit-by-bit copy). 
+​Biến mới sở hữu một vùng nhớ độc lập hoàn toàn. Mọi thay đổi trên biến mới không gây ảnh hưởng đến biến cũ.
+​Reference Types: 
+​Phép gán (b = a) chỉ sao chép giá trị của con trỏ địa chỉ, không hề nhân bản đối tượng trên Heap.
+​Cả hai biến a và b cùng trỏ chung vào một ô nhớ dữ liệu. Bất kỳ sự thay đổi trạng thái đối tượng thông qua b đều phản ánh trực tiếp khi đọc từ a. 
+​Quản lý vòng đời và dọn dẹp bộ nhớ
+​Value Types trên Stack: Bộ nhớ tự động được giải phóng ngay khi luồng thực thi thoát khỏi phạm vi (scope) của khối lệnh hoặc phương thức. Không cần bất kỳ thuật toán kiểm tra nào can thiệp.
+​Reference Types trên Heap: Được quản lý tự động bởi Garbage Collector (GC). GC chia Managed Heap thành các thế hệ (Generation 0, 1, 2) và Large Object Heap (LOH). Khi một thế hệ đầy hoặc cạn bộ nhớ, GC sẽ tạm dừng các luồng ứng dụng (Stop-the-world đối với non-concurrent phases), duyệt đồ thị đối tượng (Object Graph) để tìm các đối tượng "sống" (còn gốc tham chiếu - GC Roots), sau đó thu hồi các vùng nhớ rác và thực hiện dồn bộ nhớ (Compaction) để chống phân mảnh. Quá trình này tốn nhiều tài nguyên CPU hơn nhiều so với việc giải phóng trên Stack.
+Câu 2
+Sự khác biệt giữa init, set và get-only
+​Trước C# 9, để thiết kế một thuộc tính chỉ đọc (Read-only / Immutable), lập trình viên có hai lựa chọn chính:
+Sử dụng set thông thường:
+csharp
+public class Account
+{
+  public string AccoutNumber{get;set;}
+}
+Thuộc tính có thể sửa đổi bất kỳ lúc nào trong suốt vòng đời đối tượng. Điều này phá vỡ tính bất biến (Immutability), tiềm ẩn nguy cơ lỗi dữ liệu khi truyền đối tượng qua nhiều tầng xử lý hoặc trong môi trường đa luồng (Multi-threading).
+Sử dụng get-only({get}):
+public class Account
+{
+    public string AccountNumber { get; }
+    public Account(string accountNumber) => AccountNumber = accountNumber;
+}
+Bảo đảm tính bất biến tuyệt đối vì chỉ có thể gán giá trị bên trong Constructor. Tuy nhiên, nhược điểm là làm mất đi tính linh hoạt của cú pháp Object Initializer (new Account { AccountNumber = "123" }). Khi class có nhiều thuộc tính tùy chọn, lập trình viên buộc phải viết rất nhiều hàm khởi tạo nạp chồng (Overloaded Constructors) hoặc dùng mẫu thiết kế Builder phức tạp.
+Sự xuất hiện của init:
+init kết hợp ưu điểm của cả hai cách tiếp cận:
+​Cho phép gán giá trị thông qua Constructor hoặc thông qua cú pháp Object Initializer tại thời điểm khởi tạo.
+​Ngay khi quá trình khởi tạo kết thúc (sau dấu đóng ngoặc nhọn {} của Object Initializer), thuộc tính lập tức bị khóa và trở thành chỉ đọc. Bất kỳ thao tác gán giá trị nào sau đó đều bị Compiler chặn lại (báo lỗi biên dịch CS8852).
+​Ở tầng IL (Intermediate Language), trình biên dịch áp dụng một modreq (modifier requirement) mang tên IsExternalInit trên hàm set_* của thuộc tính để thông báo cho trình biên dịch biết phương thức này chỉ được gọi trong giai đoạn khởi tạo.
+Trường hợp sử dụng thực tế
+​Data Transfer Objects (DTO): Khi nhận dữ liệu từ API hoặc Message Queue, ta cần một đối tượng chứa dữ liệu đầu vào. Đối tượng này cần được ánh xạ dễ dàng thông qua các thư viện Serialize/Deserialize (như System.Text.Json hoặc AutoMapper) bằng Object Initializer, nhưng không được phép bị chỉnh sửa logic ở các tầng Service hay Repository. 
+​Cấu hình hệ thống (Configuration Options Pattern): Các lớp đọc dữ liệu từ appsettings.json khi ứng dụng khởi động. Dữ liệu cần được nạp một lần duy nhất lúc khởi tạo dịch vụ Dependency Injection và giữ nguyên trạng suốt vòng đời ứng dụng.
+public class DatabaseConfig
+{
+    public string ConnectionString { get; init; }
+    public int TimeoutSeconds { get; init; } = 30; // Giá trị mặc định
+}
+// Khởi tạo linh hoạt không cần viết constructor phức tạp:
+var config = new DatabaseConfig
+{
+    ConnectionString = "Server=myServerAddress;Database=myDataBase;",
+    TimeoutSeconds = 60
+};
+// Đảm bảo an toàn luồng và tính toàn vẹn:
+// config.TimeoutSeconds = 120; // Lỗi biên dịch: CS8852
+Câu 3
+Đa hình động (Dynamic / Runtime Polymorphism) trong C# cho phép một phương thức được thực thi dựa trên kiểu đối tượng thực tế tại thời điểm chạy (Runtime Type), chứ không dựa trên kiểu của biến tham chiếu tại thời điểm biên dịch (Compile-time Type). Cơ chế này được vận hành bởi cặp từ khóa virtual và override.
+​Vai trò của virtual ở lớp cha
+​virtual được dùng để khai báo rằng phương thức này có một cài đặt mặc định (default implementation), nhưng mở quyền (opt-in) cho các lớp dẫn xuất được phép thay thế hoặc mở rộng hành vi đó. 
+​Nếu lớp cha không khai báo virtual (và cũng không phải abstract), các lớp con sẽ không thể dùng từ khóa override trên phương thức đó. 
+​Khi một lớp con kế thừa lớp cha nhưng không cung cấp từ khóa override, việc gọi phương thức sẽ tự động rơi về cài đặt gốc của lớp cha.
+​Vai trò của override ở lớp con
+​override đóng vai trò xác nhận ghi đè có chủ ý. Nó báo hiệu cho trình biên dịch rằng lớp con đang chủ động thay thế cài đặt ảo từ lớp cha. 
+​Phương thức override phải giữ nguyên chữ ký hàm (Method Signature): cùng tên, kiểu trả về, danh sách tham số và mức độ truy cập (Access Modifier) như phương thức virtual gốc. 
+​Bên trong phương thức override, lập trình viên vẫn có thể gọi lại hành vi của lớp cha bằng từ khóa base.MethodName(). 
+​Cơ chế vận hành nội bộ qua Bảng hàm ảo (Virtual Method Table - vtable)
+​Mỗi khi một lớp chứa phương thức virtual, CLR sẽ tạo ra một bảng con trỏ hàm ẩn gọi là vtable gắn liền với Type Descriptor của lớp đó:
+Khi lớp cha khai báo virtual void Print(), bảng vtable của lớp cha lưu con trỏ trỏ đến địa chỉ mã máy của hàm Parent.Print().
+Khi lớp con kế thừa và khai báo override void Print(), bảng vtable riêng của lớp con sẽ ghi đè con trỏ đó bằng địa chỉ mã máy của hàm Child.Print().
+Khi bạn gọi lệnh
+Parent obj = new Child();
+obj.Print();
+Trình biên dịch không nhảy trực tiếp đến mã của Parent.Print. Thay vào đó, tại Runtime, CLR truy cập vào vtable của đối tượng thực tế trên Heap (ở đây là Child), lấy ra con trỏ hàm tại chỉ mục tương ứng và thực thi Child.Print().
+Câu 4
+Trong C#, nếu bạn tạo một thể hiện bằng var obj = new MyClass(); và cố gắng gọi obj.StaticMethod(), trình biên dịch sẽ lập tức báo lỗi biên dịch CS0176: Member cannot be accessed with an instance reference; qualify it with a type name instead.
+​Nguyên nhân đến từ ba khía cạnh kiến trúc:
+​1. Mô hình bộ nhớ và cấp độ sở hữu dữ liệu
+​Thành phần static (biến, phương thức, thuộc tính) thuộc về sở hữu của Kiểu dữ liệu (Type Definition), được nạp một lần duy nhất vào vùng nhớ Domain Neutral Heap / High Frequency Heap khi class được nạp bởi CLR Assembly Loader. 
+​Vùng nhớ của một Instance (được cấp phát bằng toán tử new trên Managed Heap) chỉ chứa các biến dữ liệu thành viên phi tĩnh (instance fields), Type Object Pointer và Sync Block Index. Bản thân instance hoàn toàn không chứa hay nắm giữ dữ liệu của thành phần static. 
+​Vì đối tượng không sở hữu thành phần tĩnh, việc truy xuất thành phần tĩnh qua đối tượng là sai lệch về mặt mô hình dữ liệu.
+​2. Sự vắng mặt của con trỏ ngữ cảnh this
+​Khi một phương thức thường (instance method) được thực thi, trình biên dịch ngầm truyền một tham số đầu tiên bí mật: con trỏ this, mang địa chỉ của chính instance đang gọi hàm đó. Nhờ con trỏ this, phương thức mới biết nó đang thao tác trên dữ liệu của đối tượng nào.
+​Phương thức static không phục vụ một instance nào, do đó nó hoàn toàn không có con trỏ this. Việc gọi phương thức qua một instance cụ thể làm nảy sinh nghịch lý: tạo cảm giác rằng phương thức cần trạng thái của đối tượng đó để xử lý, trong khi thực tế mã IL bên trong phương thức tĩnh không thể truy cập bất kỳ dữ liệu nào của instance nếu không được truyền vào rõ ràng qua tham số.
+​3. Triết lý thiết kế ngôn ngữ của C# (Tránh nhập nhằng ngữ nghĩa)
+​Một số ngôn ngữ lập trình khác (tiêu biểu như Java) cho phép gọi instance.staticMethod(). Tuy nhiên, nhóm thiết kế C# (đứng đầu bởi Anders Hejlsberg) xem đây là một quyết định thiết kế thiếu an toàn:
+​Gây hiểu lầm về mặt logic: Khi đọc mã nguồn customerA.CalculateTaxRate(), lập trình viên dễ nhầm tưởng rằng hàm này tính toán dựa trên thông tin riêng của customerA, trong khi nó có thể là một hàm dùng chung thay đổi trạng thái toàn cục của hệ thống.
+​Gây hiểu lầm về Đa hình: Thành phần tĩnh không tham gia vào cơ chế liên kết động (Dynamic Binding) hay bảng hàm ảo (vtable). Nếu cho phép gọi qua biến tham chiếu, khi một lớp con định nghĩa một thành phần tĩnh cùng tên, người lập trình có thể lầm tưởng rằng phương thức sẽ được override theo kiểu đa hình, trong khi thực tế cơ chế tĩnh chỉ liên kết tĩnh tại thời điểm biên dịch (Early Binding).
+​Do đó, C# ép buộc cú pháp gọi trực tiếp qua tên lớp: ClassName.StaticMember nhằm đảm bảo mã nguồn luôn rõ ràng, minh bạch và loại bỏ hoàn toàn các lỗi tư duy về trạng thái dùng chung.
